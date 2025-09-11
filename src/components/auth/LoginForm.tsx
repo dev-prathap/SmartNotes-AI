@@ -7,8 +7,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { toast } from 'sonner';
 import { Loader2, Mail, Lock, Eye, EyeOff } from 'lucide-react';
+import { FcGoogle } from 'react-icons/fc';
 import { useAuth } from '@/contexts/AuthContext';
 
 interface LoginFormProps {
@@ -22,7 +23,7 @@ export function LoginForm({ onSwitchToRegister }: LoginFormProps) {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   
-  const { login } = useAuth();
+  const { login, loginWithGoogle, resetPassword } = useAuth();
   const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -33,12 +34,61 @@ export function LoginForm({ onSwitchToRegister }: LoginFormProps) {
     try {
       const result = await login(email, password);
       if (result) {
+        toast.success('Login successful! Welcome back.');
         router.push('/dashboard');
       } else {
-        setError('Invalid email or password. Please try again.');
+        const errorMsg = 'Invalid email or password. Please try again.';
+        setError(errorMsg);
+        toast.error(errorMsg);
       }
     } catch (err) {
-      setError('An error occurred during login. Please try again.');
+      const errorMsg = 'An error occurred during login. Please try again.';
+      setError(errorMsg);
+      toast.error(errorMsg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    setError('');
+    setLoading(true);
+
+    try {
+      const result = await loginWithGoogle();
+      if (result.error) {
+        setError(result.error);
+        toast.error(result.error);
+      } else if ('url' in result && result.url) {
+        toast.success('Redirecting to Google...');
+        // Redirect to Google OAuth
+        window.location.href = result.url;
+      }
+    } catch (err) {
+      const errorMsg = 'Failed to initiate Google login. Please try again.';
+      setError(errorMsg);
+      toast.error(errorMsg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    if (!email.trim()) {
+      toast.error('Please enter your email address first.');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const result = await resetPassword(email);
+      if (result.success) {
+        toast.success('Password reset email sent! Check your inbox for instructions.');
+      } else {
+        toast.error(result.error || 'Failed to send password reset email. Please try again.');
+      }
+    } catch (error) {
+      toast.error('An error occurred while sending the reset email. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -54,11 +104,6 @@ export function LoginForm({ onSwitchToRegister }: LoginFormProps) {
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
-          {error && (
-            <Alert variant="destructive">
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
           
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
@@ -71,6 +116,7 @@ export function LoginForm({ onSwitchToRegister }: LoginFormProps) {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="pl-10"
+                autoComplete="email"
                 required
                 disabled={loading}
               />
@@ -88,6 +134,7 @@ export function LoginForm({ onSwitchToRegister }: LoginFormProps) {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="pl-10 pr-10"
+                autoComplete="current-password"
                 required
                 disabled={loading}
               />
@@ -119,15 +166,38 @@ export function LoginForm({ onSwitchToRegister }: LoginFormProps) {
             )}
           </Button>
 
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-background px-2 text-muted-foreground">
+                Or continue with
+              </span>
+            </div>
+          </div>
+
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full"
+            onClick={handleGoogleLogin}
+            disabled={loading}
+          >
+            {loading ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <FcGoogle className="mr-2 h-4 w-4" />
+            )}
+            Continue with Google
+          </Button>
+
           <div className="text-center space-y-2">
             <Button
               type="button"
               variant="link"
               className="text-sm text-muted-foreground"
-              onClick={() => {
-                // In a real app, this would open a forgot password dialog
-                alert('Password reset functionality would be implemented here');
-              }}
+              onClick={handleForgotPassword}
             >
               Forgot your password?
             </Button>
@@ -145,17 +215,6 @@ export function LoginForm({ onSwitchToRegister }: LoginFormProps) {
             </div>
           </div>
         </form>
-
-        {/* Demo credentials info */}
-        <div className="mt-6 p-4 bg-muted rounded-lg">
-          <p className="text-sm text-muted-foreground text-center mb-2">
-            <strong>Demo Credentials:</strong>
-          </p>
-          <p className="text-xs text-muted-foreground text-center">
-            Email: student@example.com or admin@example.com<br />
-            Password: Any password (6+ characters)
-          </p>
-        </div>
       </CardContent>
     </Card>
   );

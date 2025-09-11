@@ -8,7 +8,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { useAuth } from '@/contexts/AuthContext';
-import { quizzesStorage, quizAttemptsStorage, subjectsStorage } from '@/lib/storage';
+import { quizzesService } from '@/lib/quizzes-service';
+import { subjectsService } from '@/lib/subjects-service';
 import { Quiz, QuizAttempt, Subject } from '@/types';
 import { Brain, Clock, Trophy, Play, Plus, BarChart3 } from 'lucide-react';
 import Link from 'next/link';
@@ -20,15 +21,25 @@ export default function QuizzesPage() {
   const [subjects, setSubjects] = useState<Subject[]>([]);
 
   useEffect(() => {
-    if (user) {
-      const userQuizzes = quizzesStorage.getAll().filter(q => q.userId === user.id);
-      const userAttempts = quizAttemptsStorage.getByUser(user.id);
-      const userSubjects = subjectsStorage.getAll().filter(s => s.userId === user.id);
-      
-      setQuizzes(userQuizzes);
-      setAttempts(userAttempts);
-      setSubjects(userSubjects);
-    }
+    const loadData = async () => {
+      if (user) {
+        try {
+          const [userQuizzes, userAttempts, userSubjects] = await Promise.all([
+            quizzesService.getQuizzes(),
+            quizzesService.getQuizAttempts(),
+            subjectsService.getSubjects(),
+          ]);
+          
+          setQuizzes(userQuizzes as any);
+          setAttempts(userAttempts as any);
+          setSubjects(userSubjects as any);
+        } catch (error) {
+          console.error('Error loading data:', error);
+        }
+      }
+    };
+
+    loadData();
   }, [user]);
 
   const getSubjectName = (subjectId: string) => {

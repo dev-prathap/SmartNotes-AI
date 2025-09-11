@@ -7,7 +7,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { useAuth } from '@/contexts/AuthContext';
-import { subjectsStorage, documentsStorage, quizzesStorage, quizAttemptsStorage } from '@/lib/storage';
+import { subjectsService } from '@/lib/subjects-service';
+import { documentsService } from '@/lib/documents-service';
+// import quizzesService from '@/lib/quizzes-service';
+import { chatSessionService } from '@/lib/chat-session-service';
 import { Subject, Document, Quiz, QuizAttempt } from '@/types';
 import { 
   BookOpen, 
@@ -27,39 +30,105 @@ export default function DashboardPage() {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [recentAttempts, setRecentAttempts] = useState<QuizAttempt[]>([]);
+  const [chatSessions, setChatSessions] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
     totalStudyTime: 0,
     averageScore: 0,
     streakDays: 0,
     documentsProcessed: 0,
+    totalQuizzes: 0,
+    chatSessions: 0,
   });
 
   useEffect(() => {
-    if (user) {
-      // Load user data
-      const userSubjects = subjectsStorage.getAll().filter(s => s.userId === user.id);
-      const userDocuments = documentsStorage.getAll().filter(d => d.userId === user.id);
-      const userQuizzes = quizzesStorage.getAll().filter(q => q.userId === user.id);
-      const userAttempts = quizAttemptsStorage.getByUser(user.id).slice(0, 5);
+    const loadDashboardData = async () => {
+      if (!user) return;
+      
+      setLoading(true);
+      try {
+        // Load real data from services
+        const [userSubjects, userDocuments, sessions] = await Promise.all([
+          subjectsService.getSubjects(),
+          documentsService.getDocuments(),
+          chatSessionService.getChatSessions().catch(() => [])
+        ]);
 
-      setSubjects(userSubjects);
-      setDocuments(userDocuments);
-      setQuizzes(userQuizzes);
-      setRecentAttempts(userAttempts);
+        // Mock quiz data for now
+        const userQuizzes: Quiz[] = [];
+        const allAttempts: QuizAttempt[] = [];
+        const recentAttempts = allAttempts.slice(0, 5);
 
-      // Calculate stats
-      const avgScore = userAttempts.length > 0 
-        ? userAttempts.reduce((sum, attempt) => sum + attempt.score, 0) / userAttempts.length
-        : 0;
+        setSubjects(userSubjects as any);
+        setDocuments(userDocuments as any);
+        setQuizzes(userQuizzes);
+        setRecentAttempts(recentAttempts);
+        setChatSessions(sessions);
 
-      setStats({
-        totalStudyTime: Math.floor(Math.random() * 120) + 30, // Mock data
-        averageScore: Math.round(avgScore),
-        streakDays: Math.floor(Math.random() * 15) + 1, // Mock data
-        documentsProcessed: userDocuments.filter(d => d.isProcessed).length,
-      });
-    }
+        // Calculate real stats
+        const avgScore = allAttempts.length > 0 
+          ? allAttempts.reduce((sum: number, attempt: any) => sum + attempt.score, 0) / allAttempts.length
+          : 0;
+
+        const processedDocs = userDocuments.filter((d: any) => d.processing_status === 'completed').length;
+        const totalStudyTime = calculateStudyTime(allAttempts, sessions);
+        const streakDays = calculateStreakDays(allAttempts);
+
+        setStats({
+          totalStudyTime,
+          averageScore: Math.round(avgScore),
+          streakDays,
+          documentsProcessed: processedDocs,
+          totalQuizzes: userQuizzes.length,
+          chatSessions: sessions.length,
+        });
+      } catch (error) {
+        console.error('Error loading dashboard data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadDashboardData();
   }, [user]);
+
+  const calculateStudyTime = (attempts: QuizAttempt[], sessions: any[]) => {
+    // Calculate from quiz attempts (assume 2 minutes per question on average)
+    const quizTime = attempts.reduce((total, attempt) => {
+      return total + ((attempt as any).timeTakenSeconds || 120) / 3600; // Convert to hours
+    }, 0);
+    
+    // Estimate from chat sessions (assume 5 minutes per session)
+    const chatTime = sessions.length * 0.083; // 5 minutes in hours
+    
+    return Math.round(quizTime + chatTime);
+  };
+
+  const calculateStreakDays = (attempts: QuizAttempt[]) => {
+    if (attempts.length === 0) return 0;
+    
+    const today = new Date();
+    const sortedAttempts = attempts.sort((a, b) => 
+      new Date(b.completedAt).getTime() - new Date(a.completedAt).getTime()
+    );
+    
+    let streak = 0;
+    let currentDate = new Date(today);
+    
+    for (const attempt of sortedAttempts) {
+      const attemptDate = new Date(attempt.completedAt);
+      const daysDiff = Math.floor((currentDate.getTime() - attemptDate.getTime()) / (1000 * 60 * 60 * 24));
+      
+      if (daysDiff <= 1) {
+        streak++;
+        currentDate = attemptDate;
+      } else {
+        break;
+      }
+    }
+    
+    return streak;
+  };
 
   const quickStats = [
     {
@@ -68,6 +137,7 @@ export default function DashboardPage() {
       icon: BookOpen,
       color: 'text-blue-600',
       href: '/dashboard/subjects',
+      description: 'Active subjects'
     },
     {
       title: 'Documents',
@@ -75,20 +145,23 @@ export default function DashboardPage() {
       icon: FileText,
       color: 'text-green-600',
       href: '/dashboard/documents',
+      description: `${stats.documentsProcessed} processed`
     },
     {
-      title: 'Quizzes Taken',
-      value: recentAttempts.length,
+      title: 'Quizzes',
+      value: stats.totalQuizzes,
       icon: Brain,
       color: 'text-purple-600',
       href: '/dashboard/quizzes',
+      description: `${recentAttempts.length} attempts`
     },
     {
-      title: 'Study Streak',
-      value: `${stats.streakDays} days`,
+      title: 'Chat Sessions',
+      value: stats.chatSessions,
       icon: Trophy,
       color: 'text-orange-600',
-      href: '/dashboard/progress',
+      href: '/dashboard/ai-chat',
+      description: 'AI conversations'
     },
   ];
 
@@ -125,6 +198,9 @@ export default function DashboardPage() {
                         {stat.title}
                       </p>
                       <p className="text-2xl font-bold">{stat.value}</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {stat.description}
+                      </p>
                     </div>
                     <stat.icon className={`h-8 w-8 ${stat.color}`} />
                   </div>
@@ -134,6 +210,14 @@ export default function DashboardPage() {
           ))}
         </div>
 
+        {loading ? (
+          <div className="flex items-center justify-center h-64">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+              <p className="mt-4 text-muted-foreground">Loading dashboard...</p>
+            </div>
+          </div>
+        ) : (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Recent Activity */}
           <Card>
@@ -241,8 +325,7 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
         </div>
-
-        {/* Quick Actions */}
+        )} {/* Quick Actions */}
         <Card>
           <CardHeader>
             <CardTitle>Quick Actions</CardTitle>

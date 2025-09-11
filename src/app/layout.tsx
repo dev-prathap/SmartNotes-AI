@@ -4,7 +4,6 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { Toaster } from "@/components/ui/sonner";
-import ZoerCopilot from "@/components/ZoerCopilot";
 
 import "./globals.css";
 
@@ -42,7 +41,6 @@ export default function RootLayout({
           <AuthProvider>
             {children}
             <Toaster />
-            <ZoerCopilot />
           </AuthProvider>
         </ThemeProvider>
       </body>

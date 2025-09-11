@@ -18,8 +18,10 @@ export default function Error({
       name: error.name,
     };
 
-    // 添加额外的上下文信息
-    details.url = window.location.href;
+    // 添加额外的上下文信息 (only on client-side)
+    if (typeof window !== 'undefined') {
+      details.url = window.location.href;
+    }
     details.timestamp = new Date().toISOString();
 
     // 设置错误详情
@@ -31,7 +33,7 @@ export default function Error({
       <div className="text-2xl font-semibold text-red-500">Error</div>
       <Button
         onClick={() => {
-          if (window.parent && window.parent !== window) {
+          if (typeof window !== 'undefined' && window.parent && window.parent !== window) {
             window.parent.postMessage(
               {
                 type: "IFRAME_ERROR",

@@ -7,8 +7,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { toast } from 'sonner';
 import { Loader2, Mail, Lock, User, Eye, EyeOff } from 'lucide-react';
+import { FcGoogle } from 'react-icons/fc';
 import { useAuth } from '@/contexts/AuthContext';
 
 interface RegisterFormProps {
@@ -25,7 +26,7 @@ export function RegisterForm({ onSwitchToLogin }: RegisterFormProps) {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   
-  const { register } = useAuth();
+  const { register, loginWithGoogle } = useAuth();
   const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -34,17 +35,23 @@ export function RegisterForm({ onSwitchToLogin }: RegisterFormProps) {
 
     // Validation
     if (password !== confirmPassword) {
-      setError('Passwords do not match');
+      const errorMsg = 'Passwords do not match';
+      setError(errorMsg);
+      toast.error(errorMsg);
       return;
     }
 
     if (password.length < 6) {
-      setError('Password must be at least 6 characters long');
+      const errorMsg = 'Password must be at least 6 characters long';
+      setError(errorMsg);
+      toast.error(errorMsg);
       return;
     }
 
     if (!name.trim()) {
-      setError('Name is required');
+      const errorMsg = 'Name is required';
+      setError(errorMsg);
+      toast.error(errorMsg);
       return;
     }
 
@@ -53,12 +60,65 @@ export function RegisterForm({ onSwitchToLogin }: RegisterFormProps) {
     try {
       const result = await register(email, password, name);
       if (result) {
-        router.push('/dashboard');
+        // Check if it's an error response
+        if ((result as any).error) {
+          const errorMsg = (result as any).error;
+          if (errorMsg.includes('User already registered') || errorMsg.includes('already been registered')) {
+            const msg = 'This email is already registered. Please try signing in instead.';
+            setError(msg);
+            toast.error(msg);
+          } else {
+            setError(errorMsg);
+            toast.error(errorMsg);
+          }
+          return;
+        }
+        
+        // Check for email confirmation requirement
+        if ((result as any).emailConfirmationRequired) {
+          toast.success('Account created successfully! Please check your email to confirm your account.');
+          setError('');
+          // Clear form after successful registration
+          setName('');
+          setEmail('');
+          setPassword('');
+          setConfirmPassword('');
+        } else {
+          toast.success('Account created successfully! Welcome to SmartNotes AI.');
+          router.push('/dashboard');
+        }
       } else {
-        setError('Registration failed. Please try again.');
+        const errorMsg = 'Registration failed. Please try again.';
+        setError(errorMsg);
+        toast.error(errorMsg);
       }
     } catch (err) {
-      setError('An error occurred during registration. Please try again.');
+      const errorMsg = 'An error occurred during registration. Please try again.';
+      setError(errorMsg);
+      toast.error(errorMsg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    setError('');
+    setLoading(true);
+
+    try {
+      const result = await loginWithGoogle();
+      if (result.error) {
+        setError(result.error);
+        toast.error(result.error);
+      } else if ('url' in result && result.url) {
+        toast.success('Redirecting to Google...');
+        // Redirect to Google OAuth
+        window.location.href = result.url;
+      }
+    } catch (err) {
+      const errorMsg = 'Failed to initiate Google login. Please try again.';
+      setError(errorMsg);
+      toast.error(errorMsg);
     } finally {
       setLoading(false);
     }
@@ -74,11 +134,6 @@ export function RegisterForm({ onSwitchToLogin }: RegisterFormProps) {
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-4">
-          {error && (
-            <Alert variant="destructive">
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
           
           <div className="space-y-2">
             <Label htmlFor="name">Full Name</Label>
@@ -91,6 +146,7 @@ export function RegisterForm({ onSwitchToLogin }: RegisterFormProps) {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 className="pl-10"
+                autoComplete="name"
                 required
                 disabled={loading}
               />
@@ -108,6 +164,7 @@ export function RegisterForm({ onSwitchToLogin }: RegisterFormProps) {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="pl-10"
+                autoComplete="email"
                 required
                 disabled={loading}
               />
@@ -125,6 +182,7 @@ export function RegisterForm({ onSwitchToLogin }: RegisterFormProps) {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="pl-10 pr-10"
+                autoComplete="new-password"
                 required
                 disabled={loading}
               />
@@ -156,6 +214,7 @@ export function RegisterForm({ onSwitchToLogin }: RegisterFormProps) {
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 className="pl-10 pr-10"
+                autoComplete="new-password"
                 required
                 disabled={loading}
               />
@@ -185,6 +244,32 @@ export function RegisterForm({ onSwitchToLogin }: RegisterFormProps) {
             ) : (
               'Create Account'
             )}
+          </Button>
+
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-background px-2 text-muted-foreground">
+                Or continue with
+              </span>
+            </div>
+          </div>
+
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full"
+            onClick={handleGoogleLogin}
+            disabled={loading}
+          >
+            {loading ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <FcGoogle className="mr-2 h-4 w-4" />
+            )}
+            Continue with Google
           </Button>
 
           <div className="text-center">

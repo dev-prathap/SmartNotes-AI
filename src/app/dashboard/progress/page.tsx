@@ -11,6 +11,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { 
   subjectsStorage, 
   documentsStorage, 
+  quizzesStorage,
   quizAttemptsStorage, 
   progressStorage 
 } from '@/lib/storage';

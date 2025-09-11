@@ -1,0 +1,1 @@
+This is a test document to verify that vector embeddings are generated during upload. The document contains sample text that should be processed by the AI system to create embeddings for question answering functionality.

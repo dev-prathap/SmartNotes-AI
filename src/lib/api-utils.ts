@@ -1,21 +1,12 @@
+// Local API utilities for SmartNotes AI - Local Storage Implementation
+
 import { NextRequest } from 'next/server';
-import { postgrestClient } from './postgrest';
 
 // API 响应类型
 export interface ApiResponse<T = any> {
   success: boolean;
   data?: T;
   error?: string;
-}
-
-// 环境变量验证
-export function validateEnv(): void {
-  const requiredVars = ['POSTGREST_URL', 'POSTGREST_SCHEMA', 'POSTGREST_API_KEY'];
-  const missing = requiredVars.filter(varName => !process.env[varName]);
-  
-  if (missing.length > 0) {
-    throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
-  }
 }
 
 // 标准化错误响应
@@ -50,11 +41,11 @@ export function parseQueryParams(request: NextRequest) {
 export async function validateRequestBody(request: NextRequest): Promise<any> {
   try {
     const body = await request.json();
-    
+
     if (!body || typeof body !== 'object') {
       throw new Error('Invalid request body');
     }
-    
+
     return body;
   } catch (error) {
     if (error instanceof SyntaxError) {
@@ -64,105 +55,96 @@ export async function validateRequestBody(request: NextRequest): Promise<any> {
   }
 }
 
-// 通用CRUD操作包装器
-export class CrudOperations {
-  constructor(private tableName: string) {}
+// Local storage CRUD operations
+export class LocalCrudOperations {
+  constructor(private storageKey: string) {}
+
+  private getData(): any[] {
+    if (typeof window === 'undefined') return [];
+    const data = localStorage.getItem(this.storageKey);
+    return data ? JSON.parse(data) : [];
+  }
+
+  private saveData(data: any[]): void {
+    if (typeof window === 'undefined') return;
+    localStorage.setItem(this.storageKey, JSON.stringify(data));
+  }
 
   async findMany(filters?: Record<string, any>, limit?: number, offset?: number) {
-    validateEnv();
-    
-    let query = postgrestClient.from(this.tableName).select('*');
-    
+    let data = this.getData();
+
     // 应用过滤器
     if (filters) {
       Object.entries(filters).forEach(([key, value]) => {
         if (value !== undefined && value !== null) {
-          query = query.eq(key, value);
+          data = data.filter(item => item[key] === value);
         }
       });
     }
-    
+
     // 应用分页
     if (limit && offset !== undefined) {
-      query = query.range(offset, offset + limit - 1);
+      data = data.slice(offset, offset + limit);
     }
-    
-    const { data, error } = await query;
-    
-    if (error) {
-      throw new Error(`Failed to fetch ${this.tableName}: ${error.message}`);
-    }
-    
+
     return data;
   }
 
   async findById(id: string | number) {
-    validateEnv();
-    
-    const { data, error } = await postgrestClient
-      .from(this.tableName)
-      .select('*')
-      .eq('id', id)
-      .single();
-    
-    if (error) {
-      if (error.code === 'PGRST116') {
-        return null; // 未找到记录
-      }
-      throw new Error(`Failed to fetch ${this.tableName} by id: ${error.message}`);
-    }
-    
-    return data;
+    const data = this.getData();
+    return data.find(item => item.id === id) || null;
   }
 
-  async create(data: Record<string, any>) {
-    validateEnv();
-    
-    const { data: result, error } = await postgrestClient
-      .from(this.tableName)
-      .insert([data])
-      .select()
-      .single();
-    
-    if (error) {
-      throw new Error(`Failed to create ${this.tableName}: ${error.message}`);
-    }
-    
-    return result;
+  async create(itemData: Record<string, any>) {
+    const data = this.getData();
+    const newItem = {
+      ...itemData,
+      id: Date.now().toString(),
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    data.push(newItem);
+    this.saveData(data);
+
+    return newItem;
   }
 
-  async update(id: string | number, data: Record<string, any>) {
-    validateEnv();
-    
-    const { data: result, error } = await postgrestClient
-      .from(this.tableName)
-      .update(data)
-      .eq('id', id)
-      .select()
-      .single();
-    
-    if (error) {
-      throw new Error(`Failed to update ${this.tableName}: ${error.message}`);
+  async update(id: string | number, updateData: Record<string, any>) {
+    const data = this.getData();
+    const index = data.findIndex(item => item.id === id);
+
+    if (index === -1) {
+      throw new Error('Item not found');
     }
-    
-    return result;
+
+    const updatedItem = {
+      ...data[index],
+      ...updateData,
+      updated_at: new Date().toISOString(),
+    };
+
+    data[index] = updatedItem;
+    this.saveData(data);
+
+    return updatedItem;
   }
 
   async delete(id: string | number) {
-    validateEnv();
-    
-    const { error } = await postgrestClient
-      .from(this.tableName)
-      .delete()
-      .eq('id', id);
-    
-    if (error) {
-      throw new Error(`Failed to delete ${this.tableName}: ${error.message}`);
+    const data = this.getData();
+    const filteredData = data.filter(item => item.id !== id);
+
+    if (filteredData.length === data.length) {
+      throw new Error('Item not found');
     }
-    
+
+    this.saveData(filteredData);
     return { id };
   }
 }
+
+// Legacy alias for backward compatibility
+export const CrudOperations = LocalCrudOperations;
 
 // API 路由处理器包装器
 export function withErrorHandling(
@@ -173,12 +155,12 @@ export function withErrorHandling(
       return await handler(request);
     } catch (error) {
       console.error('Unhandled API error:', error);
-      
+
       if (error instanceof Error) {
         return errorResponse(error.message);
       }
-      
+
       return errorResponse('Internal server error');
     }
   };
-} 
+}
