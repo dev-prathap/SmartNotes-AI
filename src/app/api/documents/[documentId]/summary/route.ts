@@ -10,7 +10,7 @@ const openai = process.env.OPENAI_API_KEY ? new OpenAI({
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { documentId: string } }
+  { params }: { params: Promise<{ documentId: string }> }
 ) {
   try {
     const token = request.headers.get('Authorization')?.split(' ')[1];
@@ -30,7 +30,7 @@ export async function POST(
       );
     }
 
-    const { documentId } = params;
+    const { documentId } = await params;
     const { summaryType } = await request.json();
 
     // Validate summary type
@@ -141,7 +141,7 @@ ${summaryType === 'key_points' ? 'Format as a bulleted list with each point on a
 // GET - Get existing summaries for a document
 export async function GET(
   request: NextRequest,
-  { params }: { params: { documentId: string } }
+  { params }: { params: Promise<{ documentId: string }> }
 ) {
   try {
     const token = request.headers.get('Authorization')?.split(' ')[1];
@@ -161,7 +161,7 @@ export async function GET(
       );
     }
 
-    const { documentId } = params;
+    const { documentId } = await params;
 
     // Get all summaries for this document
     const result = await query(

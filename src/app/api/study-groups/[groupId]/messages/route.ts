@@ -6,7 +6,7 @@ import { verifyAccessToken } from '@/lib/jwt';
 // GET - Get group chat messages
 export async function GET(
   request: NextRequest,
-  context: { params: Promise<{ groupId: string }> | { groupId: string } }
+  { params }: { params: Promise<{ groupId: string }> }
 ) {
   try {
     const token = request.headers.get('Authorization')?.split(' ')[1];
@@ -26,8 +26,7 @@ export async function GET(
       );
     }
 
-    const resolvedParams = await Promise.resolve(context.params);
-    const { groupId } = resolvedParams;
+    const { groupId } = await params;
     const { searchParams } = new URL(request.url);
     const limit = parseInt(searchParams.get('limit') || '50');
     const offset = parseInt(searchParams.get('offset') || '0');
@@ -88,7 +87,7 @@ export async function GET(
 // POST - Send a message
 export async function POST(
   request: NextRequest,
-  context: { params: Promise<{ groupId: string }> | { groupId: string } }
+  { params }: { params: Promise<{ groupId: string }> }
 ) {
   try {
     const token = request.headers.get('Authorization')?.split(' ')[1];
@@ -108,8 +107,7 @@ export async function POST(
       );
     }
 
-    const resolvedParams = await Promise.resolve(context.params);
-    const { groupId } = resolvedParams;
+    const { groupId } = await params;
     const { message, messageType, metadata } = await request.json();
 
     if (!message) {

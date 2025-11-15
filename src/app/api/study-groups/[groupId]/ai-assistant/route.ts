@@ -4,7 +4,7 @@ import { query } from '@/lib/database';
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { groupId: string } }
+  { params }: { params: Promise<{ groupId: string }> }
 ) {
   try {
     const token = request.headers.get('Authorization')?.split(' ')[1];
@@ -24,7 +24,7 @@ export async function POST(
       );
     }
 
-    const { groupId } = params;
+    const { groupId } = await params;
     const { userMessage, context } = await request.json();
 
     // Check if user is a member
