@@ -20,7 +20,9 @@ import {
   Home,
   Upload,
   HelpCircle,
-  Trophy
+  Trophy,
+  UsersRound,
+  Layers
 } from 'lucide-react';
 
 const navigation = [
@@ -50,9 +52,14 @@ const navigation = [
     icon: HelpCircle,
   },
   {
-    name: 'Study Sessions',
-    href: '/dashboard/study-sessions',
-    icon: Users,
+    name: 'Flashcards',
+    href: '/dashboard/flashcards',
+    icon: Layers,
+  },
+  {
+    name: 'Study Groups',
+    href: '/dashboard/study-groups',
+    icon: UsersRound,
   },
   {
     name: 'Progress',
@@ -81,6 +88,16 @@ const quickActions = [
     name: 'Create Quiz',
     href: '/dashboard/quizzes/create',
     icon: Plus,
+  },
+  {
+    name: 'Generate Flashcards',
+    href: '/dashboard/flashcards',
+    icon: Layers,
+  },
+  {
+    name: 'Join Study Group',
+    href: '/dashboard/study-groups',
+    icon: UsersRound,
   },
 ];
 

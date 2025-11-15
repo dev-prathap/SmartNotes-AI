@@ -3,6 +3,7 @@
 
 import { testConnection } from './database.js';
 import { initializeDatabase } from './schema.js';
+import { createStudyGroupsTables } from './study-groups-schema.js';
 
 async function setupDatabase() {
   try {
@@ -18,6 +19,9 @@ async function setupDatabase() {
     console.log('🔄 Initializing database schema...');
 
     await initializeDatabase();
+    
+    console.log('🔄 Creating study groups, flashcards, and summaries tables...');
+    await createStudyGroupsTables();
 
     console.log('🎉 Database setup complete!');
     console.log('📝 You can now run your application with: bun run dev');

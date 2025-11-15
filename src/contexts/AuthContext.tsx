@@ -32,32 +32,61 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try {
         // Check if we have stored auth data
         const storedAuth = localStorage.getItem('smartnotes_auth');
+        const accessToken = localStorage.getItem('accessToken');
+        const refreshToken = localStorage.getItem('refreshToken');
+        
         if (storedAuth) {
-          const { accessToken, refreshToken } = JSON.parse(storedAuth);
-
-          if (accessToken && refreshToken) {
+          const authData = JSON.parse(storedAuth);
+          
+          if (authData.accessToken && authData.refreshToken) {
+            // Store tokens in separate keys for easier access
+            localStorage.setItem('accessToken', authData.accessToken);
+            localStorage.setItem('refreshToken', authData.refreshToken);
+            
             // Try to refresh the token to verify auth state
-            const refreshResult = await AuthService.refreshAccessToken(refreshToken);
+            const refreshResult = await AuthService.refreshAccessToken(authData.refreshToken);
             if (refreshResult) {
               setUser(refreshResult.user);
               setSession({ user: refreshResult.user });
 
               // Update stored tokens
+              localStorage.setItem('accessToken', refreshResult.accessToken);
               localStorage.setItem('smartnotes_auth', JSON.stringify({
                 accessToken: refreshResult.accessToken,
-                refreshToken: refreshToken,
+                refreshToken: authData.refreshToken,
               }));
               return;
             } else {
               // Clear expired tokens
               localStorage.removeItem('smartnotes_auth');
+              localStorage.removeItem('accessToken');
+              localStorage.removeItem('refreshToken');
             }
+          }
+        } else if (accessToken && refreshToken) {
+          // Fallback: check individual token storage
+          const refreshResult = await AuthService.refreshAccessToken(refreshToken);
+          if (refreshResult) {
+            setUser(refreshResult.user);
+            setSession({ user: refreshResult.user });
+            
+            localStorage.setItem('accessToken', refreshResult.accessToken);
+            localStorage.setItem('smartnotes_auth', JSON.stringify({
+              accessToken: refreshResult.accessToken,
+              refreshToken: refreshToken,
+            }));
+            return;
+          } else {
+            localStorage.removeItem('accessToken');
+            localStorage.removeItem('refreshToken');
           }
         }
       } catch (error) {
         console.error('Error getting initial user:', error);
         // Clear any corrupted auth data
         localStorage.removeItem('smartnotes_auth');
+        localStorage.removeItem('accessToken');
+        localStorage.removeItem('refreshToken');
       } finally {
         setLoading(false);
       }
@@ -65,6 +94,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     getInitialUser();
   }, []);
+
+  // Auto-refresh token every 23 hours (before 24h expiration)
+  useEffect(() => {
+    if (!user) return;
+
+    const refreshInterval = setInterval(async () => {
+      const refreshToken = localStorage.getItem('refreshToken');
+      if (refreshToken) {
+        const refreshResult = await AuthService.refreshAccessToken(refreshToken);
+        if (refreshResult) {
+          localStorage.setItem('accessToken', refreshResult.accessToken);
+          localStorage.setItem('smartnotes_auth', JSON.stringify({
+            accessToken: refreshResult.accessToken,
+            refreshToken: refreshToken,
+          }));
+        } else {
+          // Token refresh failed, log out user
+          logout();
+        }
+      }
+    }, 23 * 60 * 60 * 1000); // 23 hours
+
+    return () => clearInterval(refreshInterval);
+  }, [user]);
 
   const login = async (email: string, password: string): Promise<User | null> => {
     setLoading(true);
@@ -74,7 +127,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(result.user);
         setSession({ user: result.user });
 
-        // Store tokens in localStorage
+        // Store tokens in localStorage (both formats for compatibility)
+        localStorage.setItem('accessToken', result.accessToken);
+        localStorage.setItem('refreshToken', result.refreshToken);
         localStorage.setItem('smartnotes_auth', JSON.stringify({
           accessToken: result.accessToken,
           refreshToken: result.refreshToken,
@@ -99,7 +154,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(result.user);
         setSession({ user: result.user });
 
-        // Store tokens in localStorage
+        // Store tokens in localStorage (both formats for compatibility)
+        localStorage.setItem('accessToken', result.accessToken);
+        localStorage.setItem('refreshToken', result.refreshToken);
         localStorage.setItem('smartnotes_auth', JSON.stringify({
           accessToken: result.accessToken,
           refreshToken: result.refreshToken,
@@ -141,12 +198,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(null);
       setSession(null);
       localStorage.removeItem('smartnotes_auth');
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('refreshToken');
     } catch (error) {
       console.error('Logout error in context:', error);
       // Still clear the local state even if logout fails
       setUser(null);
       setSession(null);
       localStorage.removeItem('smartnotes_auth');
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('refreshToken');
     } finally {
       setLoading(false);
     }

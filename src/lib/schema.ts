@@ -5,6 +5,14 @@ import { query, transaction } from './database';
 // Create all tables
 export async function createTables(): Promise<void> {
   try {
+    // Enable pgvector extension (if available, otherwise use TEXT)
+    try {
+      await query(`CREATE EXTENSION IF NOT EXISTS vector`);
+      console.log('✅ pgvector extension enabled');
+    } catch (error) {
+      console.log('⚠️  pgvector extension not available, using TEXT for embeddings');
+    }
+
     // Users table
     await query(`
       CREATE TABLE IF NOT EXISTS users (
@@ -56,6 +64,22 @@ export async function createTables(): Promise<void> {
         used BOOLEAN DEFAULT false,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
         UNIQUE(user_id, token_hash)
+      )
+    `);
+
+    // Subjects table (must be created before documents)
+    await query(`
+      CREATE TABLE IF NOT EXISTS subjects (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name VARCHAR(255) NOT NULL,
+        description TEXT,
+        color VARCHAR(7) DEFAULT '#3B82F6',
+        icon VARCHAR(50) DEFAULT 'book',
+        is_active BOOLEAN DEFAULT true,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        UNIQUE(user_id, name)
       )
     `);
 
@@ -143,24 +167,8 @@ export async function createTables(): Promise<void> {
         document_id UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
         chunk_index INTEGER NOT NULL,
         content_text TEXT NOT NULL,
-        vector_embedding VECTOR(1536),
+        vector_embedding TEXT,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-      )
-    `);
-
-    // Subjects table
-    await query(`
-      CREATE TABLE IF NOT EXISTS subjects (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-        name VARCHAR(255) NOT NULL,
-        description TEXT,
-        color VARCHAR(7) DEFAULT '#3B82F6',
-        icon VARCHAR(50) DEFAULT 'book',
-        is_active BOOLEAN DEFAULT true,
-        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-        UNIQUE(user_id, name)
       )
     `);
 
