@@ -90,14 +90,32 @@ class DocumentsService {
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to upload document');
+        try {
+          const error = await response.json();
+          throw new Error(error.error || 'Failed to upload document');
+        } catch (jsonError) {
+          // If JSON parsing fails, throw a generic error
+          throw new Error(`Upload failed with status ${response.status}`);
+        }
       }
 
-      const data = await response.json();
+      let data;
+      try {
+        data = await response.json();
+      } catch (jsonError) {
+        console.error('JSON parsing error:', jsonError);
+        throw new Error('Server response was invalid. Please try again or contact support.');
+      }
+      
       return data.document;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Upload document error:', error);
+      
+      // Provide more helpful error messages
+      if (error.message?.includes('Failed to fetch')) {
+        throw new Error('Network error. Please check your internet connection.');
+      }
+      
       throw error;
     }
   }

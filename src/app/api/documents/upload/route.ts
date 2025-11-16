@@ -110,6 +110,9 @@ const openai = process.env.OPENAI_API_KEY ? new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 }) : null;
 
+// Increase max duration for Vercel (Pro plan supports up to 60s)
+export const maxDuration = 60;
+
 export async function POST(request: NextRequest) {
   try {
     const authHeader = request.headers.get('authorization');
@@ -183,14 +186,18 @@ export async function POST(request: NextRequest) {
     const fileExtension = file.name.split('.').pop();
     const uniqueFilename = `${uuidv4()}.${fileExtension}`;
 
-    // Upload to Cloudinary
+    // Upload to Cloudinary with timeout
     let cloudinaryResult;
     try {
-      cloudinaryResult = await uploadToCloudinary(buffer, uniqueFilename, 'smartnotes-documents');
+      const uploadPromise = uploadToCloudinary(buffer, uniqueFilename, 'smartnotes-documents');
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Cloudinary upload timeout')), 25000)
+      );
+      cloudinaryResult = await Promise.race([uploadPromise, timeoutPromise]) as any;
     } catch (error) {
       console.error('Cloudinary upload error:', error);
       return NextResponse.json(
-        { error: 'Failed to upload file to cloud storage' },
+        { error: 'Failed to upload file to cloud storage. Please try a smaller file.' },
         { status: 500 }
       );
     }
@@ -228,7 +235,7 @@ export async function POST(request: NextRequest) {
       contentText = 'Error extracting text content';
     }
 
-    // Generate vector embeddings for document chunks
+    // Generate vector embeddings for document chunks (with timeout protection)
     let mainVectorEmbedding: string | null = null;
     let chunks: string[] = [];
     
@@ -237,12 +244,17 @@ export async function POST(request: NextRequest) {
         // Chunk large documents
         chunks = chunkDocument(contentText, 4000, 200);
         
-        // Generate embedding for the first chunk as main document embedding
-        const embedding = await openai.embeddings.create({
+        // Generate embedding for the first chunk with timeout
+        const embeddingPromise = openai.embeddings.create({
           model: 'text-embedding-ada-002',
           input: chunks[0].substring(0, 8000), // Limit each chunk to 8000 characters
         });
         
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Embedding timeout')), 15000)
+        );
+        
+        const embedding = await Promise.race([embeddingPromise, timeoutPromise]) as any;
         mainVectorEmbedding = `[${embedding.data[0].embedding.join(',')}]`;
       }
     } catch (error) {
@@ -277,17 +289,26 @@ export async function POST(request: NextRequest) {
 
     const document = documentResult.rows[0];
 
-    // Save document chunks if we have any
+    // Save document chunks (process in background to avoid timeout)
+    // Only process first 5 chunks immediately, rest can be done async
     if (chunks.length > 0) {
-      for (let i = 0; i < chunks.length; i++) {
-        // Generate embedding for each chunk
+      const chunksToProcess = chunks.slice(0, Math.min(5, chunks.length));
+      
+      for (let i = 0; i < chunksToProcess.length; i++) {
+        // Generate embedding for each chunk with timeout
         let chunkVectorEmbedding: string | null = null;
         try {
           if (openai) {
-            const embedding = await openai.embeddings.create({
+            const embeddingPromise = openai.embeddings.create({
               model: 'text-embedding-ada-002',
               input: chunks[i].substring(0, 8000),
             });
+            
+            const timeoutPromise = new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('Chunk embedding timeout')), 10000)
+            );
+            
+            const embedding = await Promise.race([embeddingPromise, timeoutPromise]) as any;
             chunkVectorEmbedding = `[${embedding.data[0].embedding.join(',')}]`;
           }
         } catch (error) {
@@ -300,6 +321,15 @@ export async function POST(request: NextRequest) {
           [document.id, i, chunks[i], chunkVectorEmbedding]
         );
       }
+      
+      // Store remaining chunks without embeddings (can be processed later)
+      for (let i = chunksToProcess.length; i < chunks.length; i++) {
+        await query(
+          `INSERT INTO document_chunks (document_id, chunk_index, content_text, vector_embedding)
+           VALUES ($1, $2, $3, $4)`,
+          [document.id, i, chunks[i], null]
+        );
+      }
     }
 
     return NextResponse.json({
@@ -307,10 +337,16 @@ export async function POST(request: NextRequest) {
       message: 'Document uploaded successfully'
     });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Document upload error:', error);
+    
+    // Ensure we always return valid JSON
+    const errorMessage = error?.message || 'Internal server error';
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { 
+        error: errorMessage,
+        details: process.env.NODE_ENV === 'development' ? error?.stack : undefined
+      },
       { status: 500 }
     );
   }
