@@ -188,14 +188,10 @@ export async function POST(request: NextRequest) {
     const fileExtension = file.name.split('.').pop();
     const uniqueFilename = `${uuidv4()}.${fileExtension}`;
 
-    // Upload to Cloudinary with timeout
+    // Upload to Cloudinary
     let cloudinaryResult;
     try {
-      const uploadPromise = uploadToCloudinary(buffer, uniqueFilename, 'smartnotes-documents');
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Cloudinary upload timeout')), 5000)
-      );
-      cloudinaryResult = await Promise.race([uploadPromise, timeoutPromise]) as any;
+      cloudinaryResult = await uploadToCloudinary(buffer, uniqueFilename, 'smartnotes-documents');
     } catch (error) {
       console.error('Cloudinary upload error:', error);
       return NextResponse.json(
@@ -246,17 +242,12 @@ export async function POST(request: NextRequest) {
         // Chunk large documents
         chunks = chunkDocument(contentText, 4000, 200);
         
-        // Generate embedding for the first chunk with timeout
-        const embeddingPromise = openai.embeddings.create({
+        // Generate embedding for the first chunk
+        const embedding = await openai.embeddings.create({
           model: 'text-embedding-ada-002',
           input: chunks[0].substring(0, 8000), // Limit each chunk to 8000 characters
         });
         
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Embedding timeout')), 3000)
-        );
-        
-        const embedding = await Promise.race([embeddingPromise, timeoutPromise]) as any;
         mainVectorEmbedding = `[${embedding.data[0].embedding.join(',')}]`;
       }
     } catch (error) {
@@ -297,20 +288,15 @@ export async function POST(request: NextRequest) {
       const chunksToProcess = chunks.slice(0, Math.min(5, chunks.length));
       
       for (let i = 0; i < chunksToProcess.length; i++) {
-        // Generate embedding for each chunk with timeout
+        // Generate embedding for each chunk
         let chunkVectorEmbedding: string | null = null;
         try {
           if (openai) {
-            const embeddingPromise = openai.embeddings.create({
+            const embedding = await openai.embeddings.create({
               model: 'text-embedding-ada-002',
               input: chunks[i].substring(0, 8000),
             });
             
-            const timeoutPromise = new Promise((_, reject) => 
-              setTimeout(() => reject(new Error('Chunk embedding timeout')), 2000)
-            );
-            
-            const embedding = await Promise.race([embeddingPromise, timeoutPromise]) as any;
             chunkVectorEmbedding = `[${embedding.data[0].embedding.join(',')}]`;
           }
         } catch (error) {
