@@ -110,8 +110,10 @@ const openai = process.env.OPENAI_API_KEY ? new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 }) : null;
 
-// Increase max duration for Vercel (Pro plan supports up to 60s)
-export const maxDuration = 60;
+// Route segment config for Vercel
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+export const maxDuration = 10; // Hobby plan: 10s, Pro plan: 60s
 
 export async function POST(request: NextRequest) {
   try {
@@ -191,7 +193,7 @@ export async function POST(request: NextRequest) {
     try {
       const uploadPromise = uploadToCloudinary(buffer, uniqueFilename, 'smartnotes-documents');
       const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Cloudinary upload timeout')), 25000)
+        setTimeout(() => reject(new Error('Cloudinary upload timeout')), 5000)
       );
       cloudinaryResult = await Promise.race([uploadPromise, timeoutPromise]) as any;
     } catch (error) {
@@ -251,7 +253,7 @@ export async function POST(request: NextRequest) {
         });
         
         const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Embedding timeout')), 15000)
+          setTimeout(() => reject(new Error('Embedding timeout')), 3000)
         );
         
         const embedding = await Promise.race([embeddingPromise, timeoutPromise]) as any;
@@ -305,7 +307,7 @@ export async function POST(request: NextRequest) {
             });
             
             const timeoutPromise = new Promise((_, reject) => 
-              setTimeout(() => reject(new Error('Chunk embedding timeout')), 10000)
+              setTimeout(() => reject(new Error('Chunk embedding timeout')), 2000)
             );
             
             const embedding = await Promise.race([embeddingPromise, timeoutPromise]) as any;
