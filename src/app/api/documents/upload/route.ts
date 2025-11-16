@@ -6,7 +6,6 @@ export const maxDuration = 10;
 // API Route: /api/documents/upload
 import { NextRequest, NextResponse } from 'next/server';
 import { v4 as uuidv4 } from 'uuid';
-import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.min.mjs';
 import mammoth from 'mammoth';
 import OpenAI from 'openai';
 import { query } from '@/lib/database';
@@ -127,10 +126,6 @@ export async function OPTIONS(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  // Initialize polyfills and pdfjs at runtime
-  ensureDOMMatrixPolyfill();
-  pdfjsLib.GlobalWorkerOptions.workerSrc = 'pdfjs-dist/legacy/build/pdf.worker.min.mjs';
-  
   try {
     const authHeader = request.headers.get('authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -219,6 +214,13 @@ export async function POST(request: NextRequest) {
     let contentText = '';
     try {
       if (file.type === 'application/pdf') {
+        // Dynamically import pdfjs-dist to avoid build-time execution
+        const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.min.mjs');
+        
+        // Initialize polyfill and worker at runtime
+        ensureDOMMatrixPolyfill();
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'pdfjs-dist/legacy/build/pdf.worker.min.mjs';
+        
         // Convert Buffer to Uint8Array for pdfjs
         const uint8Array = new Uint8Array(buffer);
         
