@@ -1,7 +1,5 @@
 // API Route: /api/documents/upload
 import { NextRequest, NextResponse } from 'next/server';
-import { writeFile, mkdir } from 'fs/promises';
-import { join } from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.min.mjs';
 import mammoth from 'mammoth';
@@ -9,6 +7,7 @@ import OpenAI from 'openai';
 import { query } from '@/lib/database';
 import { verifyAccessToken } from '@/lib/jwt';
 import { chunkDocument } from '@/lib/document-chunker';
+import { uploadToCloudinary } from '@/lib/cloudinary';
 
 // Add DOMMatrix polyfill for pdfjs-dist
 if (typeof globalThis.DOMMatrix === 'undefined') {
@@ -111,8 +110,6 @@ const openai = process.env.OPENAI_API_KEY ? new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 }) : null;
 
-const UPLOAD_DIR = join(process.cwd(), 'uploads');
-
 export async function POST(request: NextRequest) {
   try {
     const authHeader = request.headers.get('authorization');
@@ -178,22 +175,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create upload directory if it doesn't exist
-    try {
-      await mkdir(UPLOAD_DIR, { recursive: true });
-    } catch (error) {
-      console.error('Error creating upload directory:', error);
-    }
+    // Convert file to buffer
+    const bytes = await file.arrayBuffer();
+    const buffer = Buffer.from(bytes);
 
     // Generate unique filename
     const fileExtension = file.name.split('.').pop();
     const uniqueFilename = `${uuidv4()}.${fileExtension}`;
-    const filePath = join(UPLOAD_DIR, uniqueFilename);
 
-    // Save file to disk
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
-    await writeFile(filePath, buffer);
+    // Upload to Cloudinary
+    let cloudinaryResult;
+    try {
+      cloudinaryResult = await uploadToCloudinary(buffer, uniqueFilename, 'smartnotes-documents');
+    } catch (error) {
+      console.error('Cloudinary upload error:', error);
+      return NextResponse.json(
+        { error: 'Failed to upload file to cloud storage' },
+        { status: 500 }
+      );
+    }
 
     // Extract text content from file
     let contentText = '';
@@ -250,7 +250,7 @@ export async function POST(request: NextRequest) {
       // Continue with null embeddings if generation fails
     }
 
-    // Save document to database
+    // Save document to database with Cloudinary URL
     const documentResult = await query(
       `INSERT INTO documents (
         user_id, subject_id, title, description, file_name, file_path,
@@ -265,7 +265,7 @@ export async function POST(request: NextRequest) {
         title,
         description || null,
         file.name,
-        filePath,
+        cloudinaryResult.url, // Store Cloudinary URL instead of local path
         file.size,
         fileExtension,
         file.type,
