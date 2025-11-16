@@ -14,9 +14,10 @@ import { verifyAccessToken } from '@/lib/jwt';
 import { chunkDocument } from '@/lib/document-chunker';
 import { uploadToCloudinary } from '@/lib/cloudinary';
 
-// Add DOMMatrix polyfill for pdfjs-dist
-if (typeof globalThis.DOMMatrix === 'undefined') {
-  globalThis.DOMMatrix = class DOMMatrix {
+// DOMMatrix polyfill function - will be called at runtime
+function ensureDOMMatrixPolyfill() {
+  if (typeof globalThis.DOMMatrix === 'undefined') {
+    globalThis.DOMMatrix = class DOMMatrix {
     a = 1;
     b = 0;
     c = 0;
@@ -101,14 +102,12 @@ if (typeof globalThis.DOMMatrix === 'undefined') {
     rotateFromVectorSelf() { return this; }
     toJSON() { return {}; }
     
-    // Properties
-    get is2D() { return true; }
-    get isIdentity() { return false; }
-  };
+      // Properties
+      get is2D() { return true; }
+      get isIdentity() { return false; }
+    };
+  }
 }
-
-// Set the worker path for pdfjs
-pdfjsLib.GlobalWorkerOptions.workerSrc = 'pdfjs-dist/legacy/build/pdf.worker.min.mjs';
 
 // Initialize OpenAI client
 const openai = process.env.OPENAI_API_KEY ? new OpenAI({
@@ -128,6 +127,10 @@ export async function OPTIONS(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  // Initialize polyfills and pdfjs at runtime
+  ensureDOMMatrixPolyfill();
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'pdfjs-dist/legacy/build/pdf.worker.min.mjs';
+  
   try {
     const authHeader = request.headers.get('authorization');
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
