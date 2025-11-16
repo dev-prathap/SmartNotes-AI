@@ -6,8 +6,9 @@ import { verifyAccessToken } from '@/lib/jwt';
 // GET - Get study group details
 export async function GET(
   request: NextRequest,
-  { params }: { params: { groupId: string } }
+  { params }: { params: Promise<{ groupId: string }> }
 ) {
+  const { groupId } = await params;
   try {
     const token = request.headers.get('Authorization')?.split(' ')[1];
     
@@ -25,8 +26,6 @@ export async function GET(
         { status: 401 }
       );
     }
-
-    const { groupId } = params;
 
     // Get group details
     const groupResult = await query(
@@ -122,8 +121,9 @@ export async function GET(
 // PUT - Update study group
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { groupId: string } }
+  { params }: { params: Promise<{ groupId: string }> }
 ) {
+  const { groupId } = await params;
   try {
     const token = request.headers.get('Authorization')?.split(' ')[1];
     
@@ -141,8 +141,6 @@ export async function PUT(
         { status: 401 }
       );
     }
-
-    const { groupId } = params;
     const { name, description, isPrivate, maxMembers } = await request.json();
 
     // Check if user is admin
@@ -184,8 +182,9 @@ export async function PUT(
 // DELETE - Delete study group
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { groupId: string } }
+  { params }: { params: Promise<{ groupId: string }> }
 ) {
+  const { groupId } = await params;
   try {
     const token = request.headers.get('Authorization')?.split(' ')[1];
     
@@ -203,8 +202,6 @@ export async function DELETE(
         { status: 401 }
       );
     }
-
-    const { groupId } = params;
 
     // Check if user is admin
     const memberResult = await query(

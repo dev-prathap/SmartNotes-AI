@@ -6,8 +6,9 @@ import { verifyAccessToken } from '@/lib/jwt';
 // POST - Join a study group
 export async function POST(
   request: NextRequest,
-  { params }: { params: { groupId: string } }
+  { params }: { params: Promise<{ groupId: string }> }
 ) {
+  const { groupId } = await params;
   try {
     const token = request.headers.get('Authorization')?.split(' ')[1];
     
@@ -26,7 +27,6 @@ export async function POST(
       );
     }
 
-    const { groupId } = params;
     const { inviteCode } = await request.json();
 
     // Get group details
