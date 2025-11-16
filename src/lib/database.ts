@@ -19,23 +19,39 @@ const dbConfig = {
 
 // Create connection pool
 let pool: Pool | null = null;
+let isPoolClosing = false;
 
 // Initialize pool only on server
 if (typeof window === 'undefined') {
   pool = new Pool(dbConfig);
 
-  // Graceful shutdown
-  process.on('SIGTERM', async () => {
-    console.log('🛑 Closing database connection pool...');
-    await pool?.end();
-    console.log('✅ Database connection pool closed');
-  });
+  // Graceful shutdown handler
+  const gracefulShutdown = async (signal: string) => {
+    if (isPoolClosing) {
+      return; // Already closing or closed
+    }
+    
+    if (!pool) {
+      return; // No pool to close
+    }
+    
+    isPoolClosing = true;
+    
+    try {
+      await pool.end();
+      pool = null; // Clear the pool reference
+    } catch (error: any) {
+      // Silently ignore "Called end on pool more than once" error
+      if (!error?.message?.includes('Called end on pool more than once')) {
+        console.error('Error closing database pool:', error);
+      }
+    }
+  };
 
-  process.on('SIGINT', async () => {
-    console.log('🛑 Closing database connection pool...');
-    await pool?.end();
-    console.log('✅ Database connection pool closed');
-  });
+  // Register shutdown handlers (use once to prevent duplicate handlers)
+  process.once('SIGTERM', () => gracefulShutdown('SIGTERM'));
+  process.once('SIGINT', () => gracefulShutdown('SIGINT'));
+  process.once('beforeExit', () => gracefulShutdown('beforeExit'));
 }
 
 // Test database connection
