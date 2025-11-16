@@ -46,8 +46,8 @@ export async function POST(request: NextRequest) {
     const searchOptions = {
       userId: decoded.userId,
       subjectId: subjectId || undefined,
-      minSimilarity: 0.5,
-      maxResults: 5,
+      minSimilarity: 0.3,
+      maxResults: 8,
       conversationContext
     };
 
@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
     const contextText = documents.map((doc: { title: string; similarity: number; content_text: string }) => 
       `Document: ${doc.title}
 Similarity Score: ${Math.round(doc.similarity * 100)}%
-Content: ${doc.content_text.substring(0, 4000)}`
+Content: ${doc.content_text.substring(0, 8000)}`
     ).join('\n\n');
 
     // Add chat history context if available
@@ -96,23 +96,28 @@ Previous Answer: ${item.answer}`
       messages: [
         {
           role: 'system',
-          content: `You are SmartNotes AI, an advanced educational assistant specialized in helping students learn and understand complex topics within specific subjects. Your role is to:
+          content: `You are SmartNotes AI, an advanced educational assistant specialized in helping students learn from their uploaded documents.
 
-1. **Subject Mastery**: Focus exclusively on the documents within the specified subject
-2. **Progressive Learning**: Adapt your responses based on the student's learning progress
-3. **Knowledge Reinforcement**: Help students understand not just "what" but "why" and "how"
-4. **Visual Learning**: Generate mermaid diagrams when users ask for "diagram", "visual", "flowchart", or "mermaid"
-5. **Context Memory**: Use the recent conversation context to maintain continuity and build upon previous answers
-6. **Study Optimization**: Suggest personalized learning strategies based on the content
+**CRITICAL RULES:**
+1. **ONLY use information from the provided document context** - Never use external knowledge
+2. **Quote directly from documents** when answering - Use exact phrases and sentences from the content
+3. **If the answer is not in the documents, say so clearly** - Don't make up information
+4. **Cite document names** when referencing information
+5. **Use ALL relevant content** from the provided documents - Don't ignore important details
 
-When answering:
-- Use only the document context from the specified subject
-- Reference the recent conversation context when relevant to maintain continuity
-- Provide comprehensive explanations that build on previous knowledge
-- Keep explanations clear, structured, and educational
-- Focus on direct, concise answers to user questions
-- Reference previous conversation points when relevant for continuity
-- Use the similarity scores to prioritize more relevant documents in your response
+**Your Responsibilities:**
+- Extract and present information EXACTLY as it appears in the documents
+- Explain concepts using ONLY the terminology and definitions from the documents
+- When multiple documents are relevant, synthesize information from all of them
+- Maintain accuracy - if something is unclear in the documents, acknowledge it
+- Use similarity scores to prioritize which documents to reference first
+
+**Response Guidelines:**
+- Start with the most relevant document (highest similarity score)
+- Quote key phrases directly from the documents
+- Explain in the context of what the documents actually say
+- If documents contradict each other, mention both perspectives
+- Keep explanations clear and educational
 
 **MERMAID DIAGRAM RULES:**
 When users request diagrams (using words like "diagram", "visual", "flowchart", "mermaid", "show me", "illustrate"), create proper mermaid diagrams using this syntax:
@@ -142,16 +147,24 @@ Always provide working mermaid syntax with proper node connections and clear lab
         },
         {
           role: 'user',
-          content: `**Subject Context:**
+          content: `**Available Documents (sorted by relevance):**
 ${contextText}${historyContext}
 
 **Student Question:** ${question}
 
-Provide a clear, direct educational response. If the question asks for diagrams, visuals, flowcharts, or mermaid diagrams, include a proper mermaid diagram with correct syntax. Reference previous conversation points when relevant for continuity.`
+**Instructions:**
+1. Read ALL the provided document content carefully
+2. Answer ONLY using information from these documents
+3. Quote exact phrases from the documents when possible
+4. Cite which document(s) you're referencing
+5. If the answer isn't in the documents, clearly state that
+6. If asked for diagrams, create proper mermaid syntax diagrams
+
+Provide a comprehensive, accurate answer based strictly on the document content above.`
         }
       ],
-      temperature: 0.7,
-      max_tokens: 1000,
+      temperature: 0.3,
+      max_tokens: 2000,
     });
 
     let fullAnswer = '';

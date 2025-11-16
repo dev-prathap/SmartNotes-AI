@@ -286,7 +286,7 @@ function DocumentsContent() {
                     accept=".pdf,.doc,.docx,.txt"
                   />
                   <p className="text-sm text-muted-foreground mt-1">
-                    Supported formats: PDF, Word (.doc/.docx), Text (.txt) - Max 10MB
+                    Supported formats: PDF, Word (.doc/.docx), Text (.txt) - Max 50MB
                   </p>
                 </div>
                 <div>

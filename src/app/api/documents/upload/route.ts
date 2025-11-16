@@ -1,7 +1,7 @@
 // Route segment config for Vercel - MUST be at the top
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-export const maxDuration = 10;
+export const maxDuration = 60; // Increased for 50MB file support
 
 // API Route: /api/documents/upload
 import { NextRequest, NextResponse } from 'next/server';
@@ -181,11 +181,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate file size (10MB limit)
-    const maxSize = 10 * 1024 * 1024; // 10MB
+    // Validate file size (max 50MB)
+    const maxSize = 50 * 1024 * 1024; // 50MB
     if (file.size > maxSize) {
       return NextResponse.json(
-        { error: 'File size too large. Maximum size is 10MB.' },
+        { error: 'File size exceeds 50MB limit' },
         { status: 400 }
       );
     }
